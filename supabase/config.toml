@@ -1,0 +1,2 @@
+[functions.sync-ncaa-results]
+verify_jwt = false
