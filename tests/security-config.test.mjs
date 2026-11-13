@@ -43,7 +43,20 @@ test('challenge members can open read-only brackets only after the lock', () => 
   assert.match(schema, /user_id = auth\.uid\(\) or clock_timestamp\(\) >=/);
   assert.match(app, /data-action="view-bracket"/);
   assert.match(app, /if\(!isLocked\(\)\)throw new Error\('Challenge brackets stay private until kickoff\.'/);
-  assert.match(app, /renderRound\(state\.round,bracket\.picks,false\)/);
+  assert.match(app, /renderRoundWindow\(bracket\.picks,false/);
+});
+
+test('bracket shows three adjacent rounds with previous and next controls', () => {
+  assert.match(app, /Array\.from\(\{length:3\}/);
+  assert.match(app, /data-action="round-window" data-direction="-1"/);
+  assert.match(app, /data-action="round-window" data-direction="1"/);
+  assert.doesNotMatch(app, /class="round-tabs"/);
+});
+
+test('finalized picks clearly distinguish correct and incorrect selections', () => {
+  assert.match(app, /pickCorrect\?'CORRECT PICK':pickWrong\?'INCORRECT PICK'/);
+  assert.match(app, /pickCorrect\?'pick-correct':pickWrong\?'pick-wrong'/);
+  assert.match(app, /result===team && !pickWrong/);
 });
 
 test('league deletion is creator-only and uses a checked database RPC', () => {

@@ -10,7 +10,7 @@ const localDraftKey = 'd3soccer2026-draft';
 const lastPoolKey = 'd3soccer2026-pool';
 const state = {
   store:null, user:null, profile:'', pools:[], room:null,
-  picks:{}, round:0, view:'bracket', modal:null, authEmail:false, viewedBracket:null,
+  picks:{}, roundStart:0, view:'bracket', modal:null, authEmail:false, viewedBracket:null,
   saveStatus:'', loading:false, toast:null, error:null
 };
 let saveTimer=null;
@@ -80,7 +80,7 @@ async function loadPool(id) {
   }
   state.picks=normalizePicks(personal || {});
   state.saveStatus='All changes saved';
-  if (previous && previous!==id) {state.viewedBracket=null;state.round=0;state.view='bracket';}
+  if (previous && previous!==id) {state.viewedBracket=null;state.roundStart=0;state.view='bracket';}
 }
 
 async function joinFromInvite(code) {
@@ -216,11 +216,9 @@ function renderMainContent() {
         <p>Click a team to advance it. Finish one round to reveal the next.</p></div>
       <span class="status-chip ${!canEdit?'locked':''}">${canEdit ? 'PICKS OPEN' : 'LOCKED'}</span>
     </div>
-    <div class="round-tabs" role="tablist" aria-label="Tournament rounds">
-      ${ROUND_NAMES.map((name,round)=>`<button role="tab" aria-selected="${state.round===round}" class="round-tab ${state.round===round?'active':''}" data-action="round" data-round="${round}"><strong>${h(name)}</strong><small>+${ROUND_POINTS[round]} points</small></button>`).join('')}
-    </div>
+    ${renderRoundNavigation()}
     <div class="bracket-instructions"><span><i class="live-pip"></i>Tap any team to advance it</span><span>${count} / 63 picks filled</span></div>
-    <div class="bracket-scroll">${renderRound(state.round,state.picks,canEdit)}</div>
+    <div class="bracket-scroll">${renderRoundWindow(state.picks,canEdit,'Your tournament bracket')}</div>
     <div class="section-footer"><div class="savestate">✓ ${h(statusText())}</div>
       <div class="manage-group">
         <button class="btn btn-small btn-outline" data-action="reset" ${!canEdit||count===0?'disabled':''}>Clear picks</button><button class="btn btn-small" data-action="save" ${!canEdit||!count?'disabled':''}>Save bracket →</button>
@@ -238,17 +236,35 @@ function renderFriendBracket() {
         <p>These picks became visible to challenge members when brackets locked.</p></div>
       <button class="btn btn-outline btn-small" data-action="friend-back">← Standings</button>
     </div>
-    <div class="round-tabs" role="tablist" aria-label="${h(bracket.name)}’s tournament rounds">
-      ${ROUND_NAMES.map((name,round)=>`<button role="tab" aria-selected="${state.round===round}" class="round-tab ${state.round===round?'active':''}" data-action="round" data-round="${round}"><strong>${h(name)}</strong><small>+${ROUND_POINTS[round]} points</small></button>`).join('')}
-    </div>
+    ${renderRoundNavigation()}
     <div class="bracket-instructions"><span><i class="live-pip"></i>Read-only bracket</span><span>${count} / 63 picks filled</span></div>
-    <div class="bracket-scroll">${renderRound(state.round,bracket.picks,false)}</div>
+    <div class="bracket-scroll">${renderRoundWindow(bracket.picks,false,`${bracket.name}’s tournament bracket`)}</div>
     <div class="section-footer"><div class="savestate">🔒 Locked at kickoff</div><button class="btn btn-outline btn-small" data-action="friend-back">Back to standings</button></div>`;
 }
 
-function renderRound(round,picks,canEdit) {
+function renderRoundNavigation() {
+  const lastStart=ROUND_NAMES.length-3;
+  const first=ROUND_NAMES[state.roundStart], last=ROUND_NAMES[state.roundStart+2];
+  return `<div class="round-window-nav" aria-label="Change visible tournament rounds">
+    <button class="round-window-btn" data-action="round-window" data-direction="-1" ${state.roundStart===0?'disabled':''}>← Previous round</button>
+    <div class="round-window-status" aria-live="polite"><strong>${h(first)} – ${h(last)}</strong><small>3 rounds shown</small></div>
+    <button class="round-window-btn" data-action="round-window" data-direction="1" ${state.roundStart===lastStart?'disabled':''}>Next round →</button>
+  </div>`;
+}
+
+function renderRoundWindow(picks,canEdit,label) {
+  const rounds=Array.from({length:3},(_,index)=>state.roundStart+index);
+  return `<div class="round-window" aria-label="${safeAttr(label)}">
+    ${rounds.map(round=>renderRound(round,picks,canEdit,state.roundStart)).join('')}
+  </div>`;
+}
+
+function renderRound(round,picks,canEdit,windowStart) {
   const gameIds=Array.from({length:gameCount(round)},(_,game)=>game);
-  return `<section class="round-panel"><div class="round-panel-head"><strong>${h(ROUND_NAMES[round])}</strong><small>${gameIds.length} matchup${gameIds.length===1?'':'s'}</small></div>
+  const step=round-windowStart, pitch=160;
+  const topOffset=pitch*(2**step-1)/2;
+  const cardGap=pitch*(2**step)-148;
+  return `<section class="round-panel" style="--round-top:${topOffset}px;--round-gap:${cardGap}px"><div class="round-panel-head"><div><strong>${h(ROUND_NAMES[round])}</strong><span>+${ROUND_POINTS[round]} points</span></div><small>${gameIds.length} matchup${gameIds.length===1?'':'s'}</small></div>
     <div class="match-list">${gameIds.map((game)=>renderGameCard(round,game,picks,canEdit)).join('')}</div></section>`;
 }
 
@@ -262,12 +278,16 @@ function teamLogo(team, large=false) {
 function renderGameCard(round,game,picks,canEdit) {
   const opts=matchup(round,game,picks),key=gameKey(round,game),picked=picks[key];
   const result=publishedResults()[key];
-  return `<article class="game-card" aria-label="Game ${key}">
+  const pickCorrect=!!result && picked===result;
+  const pickWrong=!!result && !!picked && picked!==result;
+  const resultLabel=pickCorrect?'CORRECT PICK':pickWrong?'INCORRECT PICK':result?'FINAL RESULT':'PICK WINNER';
+  const cardClass=pickCorrect?'pick-correct':pickWrong?'pick-wrong':'';
+  return `<article class="game-card ${cardClass}" aria-label="Game ${key}">
     <div class="game-choices">
-      <div class="game-topline"><span>${result?'FINAL RESULT':'PICK WINNER'}</span><b>${ROUND_SHORT[round]}-${game+1}</b></div>
+      <div class="game-topline"><span>${resultLabel}</span><b>${ROUND_SHORT[round]}-${game+1}</b></div>
       ${opts.map((team)=>{
       const selected=!!team && team===picked;
-      const correct=!!result && result===team;
+      const correct=!!result && result===team && !pickWrong;
       const wrong=!!result && selected && picked!==result;
       const classes=['team-btn',selected?'selected':'',correct?'result-win':'',wrong?'wrong':'',!team?'empty':''].filter(Boolean).join(' ');
       const disabled=!canEdit||!team;
@@ -428,7 +448,7 @@ $app.addEventListener('click',async(event)=>{
       localStorage.removeItem(lastPoolKey);
       if(state.pools[0])await loadPool(state.pools[0].id);
       else state.picks=draft();
-      state.viewedBracket=null;state.view='bracket';state.round=0;render();notify(`“${poolName}” was deleted.`);return;
+      state.viewedBracket=null;state.view='bracket';state.roundStart=0;render();notify(`“${poolName}” was deleted.`);return;
     }
     if(action==='copy-code'||action==='copy-link'){
       const text=action==='copy-code'?document.getElementById('share-code')?.textContent:document.getElementById('share-url')?.textContent;
@@ -443,10 +463,14 @@ $app.addEventListener('click',async(event)=>{
       const row=bracketRows().find(item=>item.id===button.dataset.user && item.entered);
       if(!row)throw new Error('That bracket is not available.');
       state.viewedBracket={id:row.id,name:row.name,picks:normalizePicks(row.picks)};
-      state.view='friend-bracket';state.round=0;render();return;
+      state.view='friend-bracket';state.roundStart=0;render();return;
     }
     if(action==='friend-back'){state.viewedBracket=null;state.view='leaderboard';render();return;}
-    if(action==='round'){state.round=Number(button.dataset.round);render();return;}
+    if(action==='round-window'){
+      const lastStart=ROUND_NAMES.length-3;
+      state.roundStart=Math.max(0,Math.min(lastStart,state.roundStart+Number(button.dataset.direction)));
+      render();return;
+    }
     if(action==='pick'){
       const r=Number(button.dataset.round),g=Number(button.dataset.game),t=button.dataset.team;
       if(isLocked())return;
