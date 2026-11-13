@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FIRST_ROUND, ROUND_POINTS, LOCK_AT, gameKey, gameCount,
+  FIRST_ROUND, TEAM_LOGOS, ROUND_POINTS, LOCK_AT, gameKey, gameCount,
   allGameKeys, matchup, chooseWinner, normalizePicks, scoreBracket, maxScore
 } from '../data.js';
 
@@ -19,6 +19,14 @@ test('verified first-round fixtures include Carnegie Mellon vs Salem State', () 
   assert.deepEqual(FIRST_ROUND[8], ['Tufts','Penn St.-Abington']);
   assert.deepEqual(FIRST_ROUND[16], ['Middlebury',"Saint Joseph's (ME)"]);
   assert.deepEqual(FIRST_ROUND[31], ['Scranton','Manhattanville']);
+});
+
+test('every tournament team has an official NCAA logo', () => {
+  const teams=FIRST_ROUND.flat();
+  assert.equal(Object.keys(TEAM_LOGOS).length,64);
+  for (const team of teams) {
+    assert.match(TEAM_LOGOS[team], /^https:\/\/www\.ncaa\.com\//, `${team} is missing an NCAA logo`);
+  }
 });
 
 test('advancing one winner determines next-round contenders', () => {

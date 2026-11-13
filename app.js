@@ -1,5 +1,5 @@
 import {
-  FIRST_ROUND, SECTION_NAMES, ROUND_NAMES, ROUND_SHORT, ROUND_POINTS,
+  FIRST_ROUND, TEAM_LOGOS, ROUND_NAMES, ROUND_SHORT, ROUND_POINTS,
   LOCK_AT, NCAA_BRACKET_URL, gameKey, gameCount, allGameKeys,
   matchup, normalizePicks, chooseWinner, scoreBracket, maxScore
 } from './data.js';
@@ -10,7 +10,7 @@ const localDraftKey = 'd3soccer2026-draft';
 const lastPoolKey = 'd3soccer2026-pool';
 const state = {
   store:null, user:null, profile:'', pools:[], room:null,
-  picks:{}, section:0, view:'bracket', modal:null,
+  picks:{}, round:0, view:'bracket', modal:null,
   saveStatus:'', loading:false, toast:null, error:null
 };
 let saveTimer=null;
@@ -80,7 +80,7 @@ async function loadPool(id) {
   }
   state.picks=normalizePicks(personal || {});
   state.saveStatus='All changes saved';
-  if (previous && previous!==id) {state.section=0;state.view='bracket';}
+  if (previous && previous!==id) {state.round=0;state.view='bracket';}
 }
 
 async function joinFromInvite(code) {
@@ -160,7 +160,6 @@ function render() {
   }
   const score=myScore();
   $app.innerHTML=`
-    <div class="topline">THE ROAD TO COLUMBUS &nbsp; ✦ &nbsp; 2026 NCAA DIVISION III MEN'S SOCCER</div>
     <div class="shell">
       ${renderTopbar()}
       ${state.store?.demo ? `<div class="demo-notice"><strong>Local preview mode.</strong> Your picks save in this browser, but invites and shared leaderboards require a free Supabase project and hosting. See README.md in the project package.</div>` : !state.user ? `<div class="demo-notice"><strong>You're viewing as a guest.</strong> You can explore the bracket, but sign in to save online and compete with friends.</div>` : ''}
@@ -215,12 +214,11 @@ function renderMainContent() {
         <p>Click a team to advance it. Finish one round to reveal the next.</p></div>
       <span class="status-chip ${!canEdit?'locked':''}">${canEdit ? 'PICKS OPEN' : 'LOCKED'}</span>
     </div>
-    <div class="tabstrip" role="tablist" aria-label="Tournament sections">
-      ${SECTION_NAMES.map((s,i)=>`<button role="tab" aria-selected="${state.section===i}" class="region-tab ${state.section===i?'active':''}" data-action="section" data-section="${i}"><strong>${h(s.title)}</strong><small>${h(s.subtitle)}</small></button>`).join('')}
-      <button role="tab" aria-selected="${state.section===4}" class="region-tab ${state.section===4?'active':''}" data-action="section" data-section="4"><strong>🏆 Final Four</strong><small>Road to the title</small></button>
+    <div class="round-tabs" role="tablist" aria-label="Tournament rounds">
+      ${ROUND_NAMES.map((name,round)=>`<button role="tab" aria-selected="${state.round===round}" class="round-tab ${state.round===round?'active':''}" data-action="round" data-round="${round}"><strong>${h(name)}</strong><small>+${ROUND_POINTS[round]} points</small></button>`).join('')}
     </div>
     <div class="bracket-instructions"><span><i class="live-pip"></i>Tap any team to advance it</span><span>${count} / 63 picks filled</span></div>
-    <div class="bracket-scroll">${state.section===4 ? renderFinalFour(state.picks,canEdit) : renderSection(state.section,state.picks,canEdit)}</div>
+    <div class="bracket-scroll">${renderRound(state.round,state.picks,canEdit)}</div>
     <div class="section-footer"><div class="savestate">✓ ${h(statusText())}</div>
       <div class="manage-group">
         <button class="btn btn-small btn-outline" data-action="reset" ${!canEdit||count===0?'disabled':''}>Clear picks</button><button class="btn btn-small" data-action="save" ${!canEdit||!count?'disabled':''}>Save bracket →</button>
@@ -228,47 +226,39 @@ function renderMainContent() {
     </div>`;
 }
 
-function renderSection(section,picks,canEdit) {
-  return `<div class="bracket-grid">${[0,1,2,3].map(round=>{
-    const count=8/(2**round), start=section*count;
-    const gameIds=Array.from({length:count},(_,i)=>start+i);
-    return `<section class="round-col"><div class="round-label"><strong>${h(ROUND_NAMES[round])}</strong><span>+${ROUND_POINTS[round]} PTS</span></div>
-      <div class="match-list">${gameIds.map((game)=>renderGameCard(round,game,picks,canEdit)).join('')}</div></section>`;
-  }).join('')}</div>`;
+function renderRound(round,picks,canEdit) {
+  const gameIds=Array.from({length:gameCount(round)},(_,game)=>game);
+  return `<section class="round-panel"><div class="round-panel-head"><strong>${h(ROUND_NAMES[round])}</strong><small>${gameIds.length} matchup${gameIds.length===1?'':'s'}</small></div>
+    <div class="match-list">${gameIds.map((game)=>renderGameCard(round,game,picks,canEdit)).join('')}</div></section>`;
+}
+
+const teamInitials = team => String(team || '?').replace(/\([^)]*\)/g,'').split(/[\s.-]+/).filter(Boolean).slice(0,2).map(part=>part[0]).join('').toUpperCase();
+function teamLogo(team, large=false) {
+  if (!team) return `<span class="team-logo ${large?'large':''} empty-logo">?</span>`;
+  const url=TEAM_LOGOS[team];
+  return `<span class="team-logo ${large?'large':''}"><span class="team-logo-fallback">${h(teamInitials(team))}</span>${url?`<img src="${safeAttr(url)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}</span>`;
 }
 
 function renderGameCard(round,game,picks,canEdit) {
   const opts=matchup(round,game,picks),key=gameKey(round,game),picked=picks[key];
   const result=publishedResults()[key];
-  return `<div class="game-card" aria-label="Game ${key}">
-    <span class="game-number">${ROUND_SHORT[round]}-${game+1}</span>
-    <div class="game-topline">${result?'FINAL RESULT':'PICK WINNER'}</div>
-    ${opts.map((team,index)=>{
+  return `<article class="game-card" aria-label="Game ${key}">
+    <div class="game-choices">
+      <div class="game-topline"><span>${result?'FINAL RESULT':'PICK WINNER'}</span><b>${ROUND_SHORT[round]}-${game+1}</b></div>
+      ${opts.map((team)=>{
       const selected=!!team && team===picked;
       const correct=!!result && result===team;
       const wrong=!!result && selected && picked!==result;
       const classes=['team-btn',selected?'selected':'',correct?'result-win':'',wrong?'wrong':'',!team?'empty':''].filter(Boolean).join(' ');
       const disabled=!canEdit||!team;
       return `<button class="${classes}" data-action="pick" data-round="${round}" data-game="${game}" data-team="${safeAttr(team||'')}" ${disabled?'disabled':''} title="${team?`Advance ${safeAttr(team)}`:'Pick previous round first'}">
-          <span class="mini-ball">${selected?'●':'○'}</span><span class="team-name">${h(team || (round===0?'TBD':`Winner ${game*2+index+1}`))}</span>${selected?'<span class="tick">✓</span>':''}
+          ${teamLogo(team)}<span class="team-name">${h(team || 'Winner from previous round')}</span><span class="selection-ring" aria-hidden="true">${selected?'<i></i>':''}</span>
         </button>`;
-    }).join('')}
-  </div>`;
-}
-
-function renderFinalFour(picks,canEdit) {
-  const champ=picks[gameKey(5,0)];
-  return `<div class="f4-layout">
-    <div class="f4-col"><div class="round-label"><strong>National semifinals</strong><span>+160 PTS</span></div>
-      ${renderGameCard(4,0,picks,canEdit)}
-      <div class="f4-qualifier">Section 01 winner vs Section 02 winner</div></div>
-    <div class="f4-col center"><div class="trophy-art">🏆</div><div class="f4-champ">NATIONAL CHAMPIONSHIP · DEC 5</div>
-      <div style="width:100%;max-width:255px;margin-top:16px">${renderGameCard(5,0,picks,canEdit)}</div>
-      <div class="f4-team">${h(champ || 'Your champion')}</div><div class="f4-caption">${champ?'One team to rule them all.':'Complete the bracket to crown your winner.'}</div></div>
-    <div class="f4-col"><div class="round-label"><strong>National semifinals</strong><span>+160 PTS</span></div>
-      ${renderGameCard(4,1,picks,canEdit)}
-      <div class="f4-qualifier">Section 03 winner vs Section 04 winner</div></div>
-  </div>`;
+      }).join('')}
+      <div class="game-meta"><span>${result?'Official result':'Matchup'}</span><span>${result?'Final':`${ROUND_SHORT[round]} · Game ${game+1}`}</span></div>
+    </div>
+    <div class="my-pick"><div class="my-pick-logo">${picked?teamLogo(picked,true):'<span class="pick-placeholder">—</span>'}</div><small>My pick</small><strong>${h(picked || 'Choose a team')}</strong></div>
+  </article>`;
 }
 
 function renderSidebar() {
@@ -287,7 +277,7 @@ function renderSidebar() {
       ${isPoolOwner() ? `<button class="btn btn-danger btn-small" data-action="delete-pool">Delete league</button>` : ''}
     </div>
     <div class="card side-card">
-      <div class="section-kicker">The standings</div><h3>Chase the top spot.</h3>
+      <h3>Standings</h3>
       <p class="sub">Scores update automatically from finalized NCAA results every 30 minutes.</p>
       <div class="leader-mini">
         ${rows.length ? rows.slice(0,4).map((r,i)=>`<div class="leader-mini-row"><span class="rank-bubble">${i+1}</span><span class="${r.isYou?'you':''}">${h(r.name)}${r.isYou?' (you)':''}</span><small>${r.score} pts</small></div>`).join('')
@@ -296,7 +286,7 @@ function renderSidebar() {
       <button class="btn btn-outline btn-small" data-action="view" data-view="leaderboard">Full leaderboard ↗</button>
     </div>
     <div class="card side-card">
-      <div class="section-kicker">Know the rules</div><h3>Every round matters.</h3>
+      <h3>Rules</h3>
       <div class="deadline"><div class="deadline-ico">◷</div><div><div class="deadline-date">${humanDeadline}</div><div class="deadline-small">All predictions lock at kickoff</div></div></div>
       <hr class="side-divider">
       <div class="mini-label">Points for a correct pick</div>
@@ -327,7 +317,7 @@ function renderLeaderboard() {
 }
 
 function renderRules() {
-  return `<div class="content-panel"><div class="section-kicker">How to play</div><h2 style="font-family:'Space Grotesk';font-size:27px;letter-spacing:-1px">A little knowledge. A lot of chaos.</h2>
+  return `<div class="content-panel"><h2 style="font-family:'Space Grotesk';font-size:27px;letter-spacing:-1px">How to play</h2>
     <p class="rule-intro">Pick the winner of each of the 63 games in the actual 2026 NCAA Division III men's soccer tournament. Your predictions move through the bracket automatically, all the way to the national champion.</p>
     <div class="rules-grid">${ROUND_NAMES.map((r,i)=>`<div class="rule-box"><div class="pts">+${ROUND_POINTS[i]}</div><div class="rtitle">${h(r)}</div></div>`).join('')}</div>
     <ol class="how-list"><li><strong>Create or join a challenge.</strong> Share the invitation link with your friends. Each group has its own standings.</li>
@@ -405,7 +395,7 @@ $app.addEventListener('click',async(event)=>{
       localStorage.removeItem(lastPoolKey);
       if(state.pools[0])await loadPool(state.pools[0].id);
       else state.picks=draft();
-      state.view='bracket';state.section=0;render();notify(`“${poolName}” was deleted.`);return;
+      state.view='bracket';state.round=0;render();notify(`“${poolName}” was deleted.`);return;
     }
     if(action==='copy-code'||action==='copy-link'){
       const text=action==='copy-code'?document.getElementById('share-code')?.textContent:document.getElementById('share-url')?.textContent;
@@ -415,7 +405,7 @@ $app.addEventListener('click',async(event)=>{
       const newView=button.dataset.view;
       state.view=newView;render();return;
     }
-    if(action==='section'){state.section=Number(button.dataset.section);render();return;}
+    if(action==='round'){state.round=Number(button.dataset.round);render();return;}
     if(action==='pick'){
       const r=Number(button.dataset.round),g=Number(button.dataset.game),t=button.dataset.team;
       if(isLocked())return;
