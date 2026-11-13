@@ -1,7 +1,7 @@
 import { withSupabase } from 'npm:@supabase/server@1';
 import {
   NCAA_BRACKET_URL, NCAA_CHAMPIONSHIP_ID, buildNcaaUrl, extractOfficialResults,
-  assertResultsDoNotRegress
+  assertResultsDoNotRegress, formatSyncError
 } from '../_shared/ncaa-results.js';
 
 const TOURNAMENT_KEY = '2026-d3-men';
@@ -40,7 +40,7 @@ export default {
 
       return Response.json({ok: true, games: Object.keys(results).length});
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = formatSyncError(error);
       await admin.from('official_results').update({last_attempt_at: attempt, last_error: message})
         .eq('tournament_key', TOURNAMENT_KEY);
       return Response.json({ok: false, error: message}, {status: 502});

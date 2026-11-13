@@ -10,7 +10,7 @@ const localDraftKey = 'd3soccer2026-draft';
 const lastPoolKey = 'd3soccer2026-pool';
 const state = {
   store:null, user:null, profile:'', pools:[], room:null,
-  picks:{}, round:0, view:'bracket', modal:null,
+  picks:{}, round:0, view:'bracket', modal:null, authEmail:false, viewedBracket:null,
   saveStatus:'', loading:false, toast:null, error:null
 };
 let saveTimer=null;
@@ -80,7 +80,7 @@ async function loadPool(id) {
   }
   state.picks=normalizePicks(personal || {});
   state.saveStatus='All changes saved';
-  if (previous && previous!==id) {state.round=0;state.view='bracket';}
+  if (previous && previous!==id) {state.viewedBracket=null;state.round=0;state.view='bracket';}
 }
 
 async function joinFromInvite(code) {
@@ -143,6 +143,7 @@ function bracketRows() {
       score:score.total,
       correct:score.correct,
       champion:picks[gameKey(5,0)] || null,
+      picks,
       entered:!!record,
       createdAt:record?.created_at || '9999',
     };
@@ -162,7 +163,7 @@ function render() {
   $app.innerHTML=`
     <div class="shell">
       ${renderTopbar()}
-      ${state.store?.demo ? `<div class="demo-notice"><strong>Local preview mode.</strong> Your picks save in this browser, but invites and shared leaderboards require a free Supabase project and hosting. See README.md in the project package.</div>` : !state.user ? `<div class="demo-notice"><strong>You're viewing as a guest.</strong> You can explore the bracket, but sign in to save online and compete with friends.</div>` : ''}
+      ${state.store?.demo ? `<div class="demo-notice"><strong>Local preview mode.</strong> Your picks save in this browser, but invites and shared leaderboards require a free Supabase project and hosting. See README.md in the project package.</div>` : !state.user ? `<div class="demo-notice"><strong>You're viewing as a guest.</strong> You can explore the bracket, but log in to save online and compete with friends.</div>` : ''}
       <div class="metrics">
         ${metric('Your picks',`${pickCount()}<span class="small">/ 63</span>`, `<div class="progress-track"><div class="progress-fill" style="width:${pickCount()/63*100}%"></div></div>`,true)}
         ${metric('Your points',`${score.total}<span class="small">/ ${maxScore}</span>`,`${score.correct} correct predictions`,false)}
@@ -191,13 +192,13 @@ function renderTopbar() {
   return `<header class="topbar">
     <a class="brand" href="./" aria-label="D3 Soccer Bracket homepage"><span class="brandmark">D3</span><span class="brandword">D3 Soccer <span>Bracket</span></span></a>
     <nav class="nav" aria-label="Site navigation">
-      <button class="nav-btn ${state.view==='bracket'?'active':''}" data-action="view" data-view="bracket">My bracket</button>
+      <button class="nav-btn ${state.view==='bracket'||state.view==='friend-bracket'?'active':''}" data-action="view" data-view="bracket">My bracket</button>
       <button class="nav-btn ${state.view==='leaderboard'?'active':''}" data-action="view" data-view="leaderboard">Leaderboard</button>
       <button class="nav-btn ${state.view==='rules'?'active':''}" data-action="view" data-view="rules">Rules</button>
     </nav>
     <div class="topright">
       ${hasProfile ? `<button class="avatar" data-action="profile" title="Change your display name">${h(state.profile.slice(0,1).toUpperCase())}</button><span class="profile-name">${h(state.profile)}</span><button class="signout" data-action="signout" title="Sign out of your account">Sign out</button>`
-      : `<button class="btn btn-small" data-action="auth">Sign in</button>`}
+      : `<button class="btn btn-small" data-action="auth">Log in</button>`}
     </div>
   </header>`;
 }
@@ -205,6 +206,7 @@ function renderTopbar() {
 function renderMainContent() {
   if (state.view==='leaderboard') return renderLeaderboard();
   if (state.view==='rules') return renderRules();
+  if (state.view==='friend-bracket') return renderFriendBracket();
   const count=Object.keys(state.picks).length;
   const canEdit=!isLocked();
   return `
@@ -224,6 +226,24 @@ function renderMainContent() {
         <button class="btn btn-small btn-outline" data-action="reset" ${!canEdit||count===0?'disabled':''}>Clear picks</button><button class="btn btn-small" data-action="save" ${!canEdit||!count?'disabled':''}>Save bracket →</button>
       </div>
     </div>`;
+}
+
+function renderFriendBracket() {
+  const bracket=state.viewedBracket;
+  if (!bracket) {state.view='leaderboard';return renderLeaderboard();}
+  const count=Object.keys(bracket.picks).length;
+  return `
+    <div class="card-head">
+      <div><div class="section-kicker">Locked challenge bracket</div><h2>${h(bracket.name)}’s bracket</h2>
+        <p>These picks became visible to challenge members when brackets locked.</p></div>
+      <button class="btn btn-outline btn-small" data-action="friend-back">← Standings</button>
+    </div>
+    <div class="round-tabs" role="tablist" aria-label="${h(bracket.name)}’s tournament rounds">
+      ${ROUND_NAMES.map((name,round)=>`<button role="tab" aria-selected="${state.round===round}" class="round-tab ${state.round===round?'active':''}" data-action="round" data-round="${round}"><strong>${h(name)}</strong><small>+${ROUND_POINTS[round]} points</small></button>`).join('')}
+    </div>
+    <div class="bracket-instructions"><span><i class="live-pip"></i>Read-only bracket</span><span>${count} / 63 picks filled</span></div>
+    <div class="bracket-scroll">${renderRound(state.round,bracket.picks,false)}</div>
+    <div class="section-footer"><div class="savestate">🔒 Locked at kickoff</div><button class="btn btn-outline btn-small" data-action="friend-back">Back to standings</button></div>`;
 }
 
 function renderRound(round,picks,canEdit) {
@@ -309,8 +329,8 @@ function renderLeaderboard() {
     <div class="leaderboard-heading"><div><div class="section-kicker">Bragging rights on the line</div><h2>${state.room?h(state.room.pool.name):'Group leaderboard'}</h2>
       <p>${decided} of 63 official games completed. ${prelock?'Brackets stay private until kickoff.':''} ${h(syncStatus)}</p></div>
       <button class="btn btn-outline btn-small" data-action="refresh">↻ Refresh</button></div>
-    ${rows.length ? `<div class="table-wrap"><table class="leader-table"><thead><tr><th>Rank</th><th>Player</th><th>Points</th><th>Correct</th><th>National champion pick</th></tr></thead>
-      <tbody>${rows.map((r,i)=>`<tr class="${r.isYou?'self':''}"><td class="rank">${r.rank||'—'}</td><td class="player">${h(r.name)} ${r.isYou?'<span class="badge-demo">YOU</span>':''}</td><td class="score">${r.score}</td><td class="muted">${r.correct}</td><td class="muted">${prelock && !r.isYou ? 'Hidden until brackets lock' : !r.entered ? 'Not yet saved' : h(r.champion||'Not yet picked')}</td></tr>`).join('')}</tbody></table></div>`
+    ${rows.length ? `<div class="table-wrap"><table class="leader-table"><thead><tr><th>Rank</th><th>Player</th><th>Points</th><th>Correct</th><th>National champion pick</th><th>Bracket</th></tr></thead>
+      <tbody>${rows.map((r,i)=>`<tr class="${r.isYou?'self':''}"><td class="rank">${r.rank||'—'}</td><td class="player">${h(r.name)} ${r.isYou?'<span class="badge-demo">YOU</span>':''}</td><td class="score">${r.score}</td><td class="muted">${r.correct}</td><td class="muted">${prelock && !r.isYou ? 'Hidden until brackets lock' : !r.entered ? 'Not yet saved' : h(r.champion||'Not yet picked')}</td><td>${prelock && !r.isYou ? '<span class="muted">Locked</span>' : r.entered ? `<button class="view-bracket-btn" data-action="view-bracket" data-user="${safeAttr(r.id)}">View bracket</button>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty-state"><div class="empty-icon">🏆</div><h3>Your league is waiting.</h3><p>Start a challenge or join a friend’s group to see the standings here.</p><button class="btn" data-action="create">Start a challenge</button></div>`}
     <div class="callout" style="margin-top:22px"><strong>Scoring:</strong> 10 / 20 / 40 / 80 / 160 / 320 points per correct winner in each successive round. A perfect bracket earns ${maxScore.toLocaleString()} points. Finalized winners are imported from NCAA.com every 30 minutes, including matches decided in overtime or on penalty kicks.</div>
   </div>`;
@@ -321,8 +341,8 @@ function renderRules() {
     <p class="rule-intro">Pick the winner of each of the 63 games in the actual 2026 NCAA Division III men's soccer tournament. Your predictions move through the bracket automatically, all the way to the national champion.</p>
     <div class="rules-grid">${ROUND_NAMES.map((r,i)=>`<div class="rule-box"><div class="pts">+${ROUND_POINTS[i]}</div><div class="rtitle">${h(r)}</div></div>`).join('')}</div>
     <ol class="how-list"><li><strong>Create or join a challenge.</strong> Share the invitation link with your friends. Each group has its own standings.</li>
-      <li><strong>Make your picks.</strong> Choose winners in each section, then select both semifinal winners and the champion in the Final Four tab. Changes to earlier games clear invalid downstream selections.</li>
-      <li><strong>Save and come back.</strong> Picks auto-save in online challenges. Sign in with the same email and password to restore your saved brackets from any device. You can edit it until <strong>${humanDeadline}</strong>.</li>
+      <li><strong>Make your picks.</strong> Work through each round tab, from the Round of 64 through the championship. Changes to earlier games clear invalid downstream selections.</li>
+      <li><strong>Save and come back.</strong> Picks auto-save in online challenges. Log in with Google using the same email to restore your saved brackets from any device. You can edit it until <strong>${humanDeadline}</strong>.</li>
       <li><strong>Climb the leaderboard.</strong> Finalized winners are imported from NCAA.com every 30 minutes. Points are awarded for picking the team that advances, including overtime and penalty-kick decisions.</li>
       <li><strong>No peeking.</strong> Other participants' bracket selections are hidden until the kickoff deadline.</li></ol>
     <div class="callout">Only the 2026 NCAA Division III <strong>men's</strong> soccer tournament is included. Games tied after regulation are determined by the team advancing from the match, including penalty kicks when necessary. <a href="${NCAA_BRACKET_URL}" target="_blank" rel="noopener noreferrer">Check the official NCAA bracket ↗</a></div>
@@ -335,14 +355,22 @@ function renderModal() {
   let body='';
   if (type==='profile') body=`<div class="section-kicker">Player profile</div><h2>What should we call you?</h2><p>This name appears on your group's leaderboard. You can change it later.</p>
     <form data-form="profile"><label for="player-name">Display name</label><input class="field" id="player-name" name="name" value="${safeAttr(state.profile)}" maxlength="40" minlength="2" required placeholder="e.g. Soccer Genius" autofocus><button type="submit" class="btn">Continue →</button></form>`;
-  if (type==='auth') body=`<div class="section-kicker">Join the competition</div><h2>Sign in to play</h2>
-    <p>Use your email and password to access your saved brackets from any device. New here? Create an account below.</p>
-    <form data-form="auth">
+  if (type==='auth') body=`<div class="section-kicker">Welcome</div><h2>Log in or create an account</h2>
+    <p>Continue with Google to access your bracket from any device.</p>
+    <button class="google-btn" data-action="google-auth" autofocus>
+      <svg class="google-icon" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.797 2.716v2.259h2.909c1.703-1.568 2.684-3.878 2.684-6.615Z"/><path fill="#34A853" d="M9 18c2.43 0 4.468-.806 5.956-2.18l-2.909-2.259c-.806.54-1.836.859-3.047.859-2.344 0-4.328-1.585-5.037-3.714H.956v2.333A9 9 0 0 0 9 18Z"/><path fill="#FBBC05" d="M3.963 10.706A5.41 5.41 0 0 1 3.682 9c0-.592.102-1.168.281-1.706V4.961H.956A9 9 0 0 0 0 9c0 1.452.347 2.827.956 4.039l3.007-2.333Z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.507.454 3.441 1.346l2.581-2.581C13.464.892 11.426 0 9 0A9 9 0 0 0 .956 4.961l3.007 2.333C4.672 5.165 6.656 3.58 9 3.58Z"/></svg>
+      <span>Continue with Google</span>
+    </button>
+    <p class="auth-helper"><strong>New here?</strong> Your account will be created automatically.</p>
+    <p class="auth-match-note">Already have an account? Use the Google account with the same email to keep your saved bracket.</p>
+    <button class="auth-switch" data-action="email-auth">${state.authEmail?'Hide email and password':'Use email and password instead'}</button>
+    ${state.authEmail?`<form class="auth-email-panel" data-form="auth">
+      <h3>Email and password</h3>
       <label for="email">Email address</label><input class="field" id="email" name="email" type="email" required placeholder="you@example.com" autocomplete="email" autofocus>
       <label for="password">Password</label><input class="field" id="password" name="password" type="password" required minlength="8" placeholder="At least 8 characters" autocomplete="current-password">
-      <div class="auth-actions"><button type="submit" class="btn" data-auth-mode="signin">Sign in →</button><button type="submit" class="btn btn-outline" data-auth-mode="signup">Create account</button></div>
+      <div class="auth-actions"><button type="submit" class="btn" data-auth-mode="signin">Log in with email</button><button type="submit" class="btn btn-outline" data-auth-mode="signup">New here? Create an email account</button></div>
       <p class="auth-note">Email confirmation and password-reset email are disabled. Save your password somewhere secure.</p>
-    </form>`;
+    </form>`:''}`;
   if (type==='create') body=`<div class="section-kicker">Your inner circle</div><h2>Start a challenge.</h2><p>Give your league a name, then invite friends with a private share code. You can still join other leagues later.</p>
     <form data-form="create"><label for="pool-name">Challenge name</label><input class="field" id="pool-name" name="name" required minlength="2" maxlength="80" placeholder="e.g. Tartan Soccer Crew" autofocus><button type="submit" class="btn">Create my challenge →</button></form>
     <button class="alt-link" data-action="join">Already have an invite? Join instead</button>`;
@@ -368,13 +396,18 @@ $app.addEventListener('click',async(event)=>{
   try {
     if(action==='overlay-close' || action==='close-modal'){if(state.modal==='profile'&&!state.profile)return;state.modal=null;render();return;}
     if(action==='retry'){state.error=null;await bootstrap();return;}
-    if(action==='auth'){state.modal='auth';render();return;}
+    if(action==='auth'){state.authEmail=false;state.modal='auth';render();return;}
+    if(action==='email-auth'){state.authEmail=!state.authEmail;render();return;}
+    if(action==='google-auth'){
+      const redirectUrl=new URL(location.href);redirectUrl.hash='';
+      await state.store.signInWithGoogle(redirectUrl.href);return;
+    }
     if(action==='profile'){state.modal='profile';render();return;}
     if(action==='signout'){
       await flushPendingSave();
       await state.store.signOut();
       state.user=null;state.profile='';state.pools=[];state.room=null;
-      state.picks=draft();state.modal=state.store.demo?'profile':'auth';render();return;
+      state.picks=draft();state.viewedBracket=null;state.view='bracket';state.authEmail=false;state.modal=state.store.demo?'profile':'auth';render();return;
     }
     if(action==='create'||action==='join'){
       if(!state.user){state.modal='auth';}
@@ -395,7 +428,7 @@ $app.addEventListener('click',async(event)=>{
       localStorage.removeItem(lastPoolKey);
       if(state.pools[0])await loadPool(state.pools[0].id);
       else state.picks=draft();
-      state.view='bracket';state.round=0;render();notify(`“${poolName}” was deleted.`);return;
+      state.viewedBracket=null;state.view='bracket';state.round=0;render();notify(`“${poolName}” was deleted.`);return;
     }
     if(action==='copy-code'||action==='copy-link'){
       const text=action==='copy-code'?document.getElementById('share-code')?.textContent:document.getElementById('share-url')?.textContent;
@@ -403,8 +436,16 @@ $app.addEventListener('click',async(event)=>{
     }
     if(action==='view'){
       const newView=button.dataset.view;
-      state.view=newView;render();return;
+      state.viewedBracket=null;state.view=newView;render();return;
     }
+    if(action==='view-bracket'){
+      if(!isLocked())throw new Error('Challenge brackets stay private until kickoff.');
+      const row=bracketRows().find(item=>item.id===button.dataset.user && item.entered);
+      if(!row)throw new Error('That bracket is not available.');
+      state.viewedBracket={id:row.id,name:row.name,picks:normalizePicks(row.picks)};
+      state.view='friend-bracket';state.round=0;render();return;
+    }
+    if(action==='friend-back'){state.viewedBracket=null;state.view='leaderboard';render();return;}
     if(action==='round'){state.round=Number(button.dataset.round);render();return;}
     if(action==='pick'){
       const r=Number(button.dataset.round),g=Number(button.dataset.game),t=button.dataset.team;

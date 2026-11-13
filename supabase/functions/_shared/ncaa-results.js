@@ -153,3 +153,18 @@ export function assertResultsDoNotRegress(previous, next) {
     }
   }
 }
+
+export function formatSyncError(error) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const parts = [
+      error.message,
+      error.details && `Details: ${error.details}`,
+      error.hint && `Hint: ${error.hint}`,
+      error.code && `Code: ${error.code}`
+    ].filter(Boolean);
+    if (parts.length) return parts.join(' | ');
+    try { return JSON.stringify(error); } catch { /* fall through */ }
+  }
+  return String(error);
+}

@@ -5,7 +5,7 @@
 revoke all on table public.tournament_first_round, public.profiles, public.pools,
   public.pool_members, public.brackets from anon, authenticated;
 
-grant select on table public.tournament_first_round to anon, authenticated;
+grant select on table public.tournament_first_round to anon, authenticated, service_role;
 grant select, insert, update on table public.profiles to authenticated;
 grant select on table public.pools, public.pool_members to authenticated;
 grant select, insert, update on table public.brackets to authenticated;

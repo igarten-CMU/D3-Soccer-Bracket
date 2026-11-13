@@ -43,6 +43,7 @@ create policy official_results_read on public.official_results
 revoke all on table public.official_results from anon, authenticated;
 grant select on table public.official_results to authenticated;
 grant select, insert, update on table public.official_results to service_role;
+grant select on table public.tournament_first_round to service_role;
 grant execute on function public.valid_bracket(jsonb) to service_role;
 
 -- League organizers can no longer publish or alter results.

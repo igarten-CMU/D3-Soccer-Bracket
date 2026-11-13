@@ -39,6 +39,15 @@ class CloudStore {
     if (!data?.user) throw new Error('Sign-in did not return a user. Please try again.');
     return data.user;
   }
+  async signInWithGoogle(redirectTo) {
+    const {data, error} = await this.client.auth.signInWithOAuth({
+      provider:'google',
+      options:{redirectTo}
+    });
+    if (error) throw error;
+    if (!data?.url) throw new Error('Google login did not start. Please try again.');
+    return data;
+  }
   async signOut() { const {error} = await this.client.auth.signOut(); if (error) throw error; }
   async profile(user) {
     const {data, error} = await this.client.from('profiles').select('display_name').eq('id', user.id).maybeSingle();
@@ -91,6 +100,7 @@ class DemoStore {
   async user() { return {id:this.id, email:'preview@local.test'}; }
   onAuth() { return {data:{subscription:{unsubscribe(){}}}}; }
   async signOut() { write('name', ''); }
+  async signInWithGoogle() { throw new Error('Google login requires the configured Supabase project.'); }
   async profile() { return read('name', ''); }
   async saveProfile(_user, name) { write('name', name.trim()); }
   async pools() { return read('pools', []); }

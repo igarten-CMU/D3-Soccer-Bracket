@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildNcaaUrl, extractOfficialResults, isFinalContest, assertResultsDoNotRegress
+  buildNcaaUrl, extractOfficialResults, isFinalContest, assertResultsDoNotRegress,
+  formatSyncError
 } from '../supabase/functions/_shared/ncaa-results.js';
 
 const team = (seoname, isWinner = false, score = '0') => ({seoname, isWinner, score});
@@ -83,4 +84,12 @@ test('rejects ambiguous finals and result regressions', () => {
     () => assertResultsDoNotRegress({r0m0: 'Williams'}, {}),
     /last known-good results/
   );
+});
+
+test('preserves useful Supabase error details for failed syncs', () => {
+  assert.equal(
+    formatSyncError({message:'permission denied',details:'table tournament_first_round',hint:'grant select',code:'42501'}),
+    'permission denied | Details: table tournament_first_round | Hint: grant select | Code: 42501'
+  );
+  assert.equal(formatSyncError(new Error('NCAA returned HTTP 503')), 'NCAA returned HTTP 503');
 });

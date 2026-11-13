@@ -9,7 +9,7 @@ const edge = readFileSync(new URL('../supabase/functions/sync-ncaa-results/index
 
 test('schema uses explicit least-privilege Data API grants', () => {
   assert.match(schema, /revoke all on table public\.tournament_first_round[\s\S]*from anon, authenticated;/);
-  assert.match(schema, /grant select on table public\.tournament_first_round to anon, authenticated;/);
+  assert.match(schema, /grant select on table public\.tournament_first_round to anon, authenticated, service_role;/);
   assert.match(schema, /grant select, insert, update on table public\.profiles to authenticated;/);
   assert.match(schema, /grant select on table public\.pools, public\.pool_members to authenticated;/);
   assert.match(schema, /grant select, insert, update on table public\.brackets to authenticated;/);
@@ -18,10 +18,13 @@ test('schema uses explicit least-privilege Data API grants', () => {
   assert.match(schema, /revoke all on function public\.set_pool_results\(uuid,jsonb\) from public, anon, authenticated;/);
 });
 
-test('cloud login uses email and password without magic-link delivery', () => {
+test('cloud login uses Google OAuth with an email/password fallback', () => {
   assert.doesNotMatch(store, /signInWithOtp|sendLink/);
+  assert.match(store, /auth\.signInWithOAuth\(\{[\s\S]*provider:'google'/);
   assert.match(store, /auth\.signUp\(\{email, password\}\)/);
   assert.match(store, /auth\.signInWithPassword\(\{email, password\}\)/);
+  assert.match(app, /Continue with Google/);
+  assert.match(app, /Use email and password instead/);
   assert.match(app, /type="password"/);
   assert.match(app, /data-auth-mode="signin"/);
   assert.match(app, /data-auth-mode="signup"/);
@@ -34,6 +37,13 @@ test('results are read-only in the browser and written only by the protected syn
   assert.match(edge, /withSupabase\(\{auth: 'secret'\}/);
   assert.match(edge, /ctx\.supabaseAdmin/);
   assert.match(edge, /assertResultsDoNotRegress/);
+});
+
+test('challenge members can open read-only brackets only after the lock', () => {
+  assert.match(schema, /user_id = auth\.uid\(\) or clock_timestamp\(\) >=/);
+  assert.match(app, /data-action="view-bracket"/);
+  assert.match(app, /if\(!isLocked\(\)\)throw new Error\('Challenge brackets stay private until kickoff\.'/);
+  assert.match(app, /renderRound\(state\.round,bracket\.picks,false\)/);
 });
 
 test('league deletion is creator-only and uses a checked database RPC', () => {
