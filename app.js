@@ -27,7 +27,7 @@ const selectedPoolId = () => state.room?.pool?.id || '';
 const pickCount = () => Object.keys(state.picks).length;
 const participantCount = () => state.room?.members?.length || 0;
 const isPoolOwner = () => !!state.room && state.room.pool.owner_id===state.user?.id;
-const visibleRoundCount = () => window.matchMedia('(max-width: 560px)').matches ? 1 : 3;
+const visibleRoundCount = () => window.matchMedia('(max-width: 560px)').matches ? 2 : 3;
 const lastRoundStart = () => ROUND_NAMES.length-visibleRoundCount();
 const draft = () => { try {return normalizePicks(JSON.parse(localStorage.getItem(localDraftKey) || '{}'));} catch {return {};} };
 const saveDraftLocal = picks => localStorage.setItem(localDraftKey, JSON.stringify(picks));

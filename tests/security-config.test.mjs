@@ -46,8 +46,8 @@ test('challenge members can open read-only brackets only after the lock', () => 
   assert.match(app, /renderRoundWindow\(bracket\.picks,false/);
 });
 
-test('bracket shows three desktop rounds and one full-width phone round', () => {
-  assert.match(app, /matchMedia\('\(max-width: 560px\)'\)\.matches \? 1 : 3/);
+test('bracket shows three desktop rounds and two compact phone rounds', () => {
+  assert.match(app, /matchMedia\('\(max-width: 560px\)'\)\.matches \? 2 : 3/);
   assert.match(app, /Array\.from\(\{length:visibleRoundCount\(\)\}/);
   assert.match(app, /ROUND_NAMES\.length-visibleRoundCount\(\)/);
   assert.match(app, /data-action="round-window" data-direction="-1"/);
