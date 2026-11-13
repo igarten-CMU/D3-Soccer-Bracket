@@ -27,6 +27,8 @@ const selectedPoolId = () => state.room?.pool?.id || '';
 const pickCount = () => Object.keys(state.picks).length;
 const participantCount = () => state.room?.members?.length || 0;
 const isPoolOwner = () => !!state.room && state.room.pool.owner_id===state.user?.id;
+const visibleRoundCount = () => window.matchMedia('(max-width: 560px)').matches ? 1 : 3;
+const lastRoundStart = () => ROUND_NAMES.length-visibleRoundCount();
 const draft = () => { try {return normalizePicks(JSON.parse(localStorage.getItem(localDraftKey) || '{}'));} catch {return {};} };
 const saveDraftLocal = picks => localStorage.setItem(localDraftKey, JSON.stringify(picks));
 const statusText = () => isLocked() ? 'Picks locked' : state.saveStatus || (state.room ? 'Auto-save enabled' : 'Saved in this browser');
@@ -243,17 +245,19 @@ function renderFriendBracket() {
 }
 
 function renderRoundNavigation() {
-  const lastStart=ROUND_NAMES.length-3;
-  const first=ROUND_NAMES[state.roundStart], last=ROUND_NAMES[state.roundStart+2];
+  const count=visibleRoundCount(), lastStart=lastRoundStart();
+  state.roundStart=Math.min(state.roundStart,lastStart);
+  const first=ROUND_NAMES[state.roundStart], last=ROUND_NAMES[state.roundStart+count-1];
+  const range=count===1?first:`${first} – ${last}`;
   return `<div class="round-window-nav" aria-label="Change visible tournament rounds">
     <button class="round-window-btn" data-action="round-window" data-direction="-1" ${state.roundStart===0?'disabled':''}>← Previous round</button>
-    <div class="round-window-status" aria-live="polite"><strong>${h(first)} – ${h(last)}</strong><small>3 rounds shown</small></div>
+    <div class="round-window-status" aria-live="polite"><strong>${h(range)}</strong><small>${count} round${count===1?'':'s'} shown</small></div>
     <button class="round-window-btn" data-action="round-window" data-direction="1" ${state.roundStart===lastStart?'disabled':''}>Next round →</button>
   </div>`;
 }
 
 function renderRoundWindow(picks,canEdit,label) {
-  const rounds=Array.from({length:3},(_,index)=>state.roundStart+index);
+  const rounds=Array.from({length:visibleRoundCount()},(_,index)=>state.roundStart+index);
   return `<div class="round-window" aria-label="${safeAttr(label)}">
     ${rounds.map(round=>renderRound(round,picks,canEdit,state.roundStart)).join('')}
   </div>`;
@@ -467,8 +471,7 @@ $app.addEventListener('click',async(event)=>{
     }
     if(action==='friend-back'){state.viewedBracket=null;state.view='leaderboard';render();return;}
     if(action==='round-window'){
-      const lastStart=ROUND_NAMES.length-3;
-      state.roundStart=Math.max(0,Math.min(lastStart,state.roundStart+Number(button.dataset.direction)));
+      state.roundStart=Math.max(0,Math.min(lastRoundStart(),state.roundStart+Number(button.dataset.direction)));
       render();return;
     }
     if(action==='pick'){
@@ -550,5 +553,14 @@ setInterval(async()=>{
   if(state.view!=='leaderboard'||!state.room)return;
   try {await flushPendingSave();await loadPool(selectedPoolId());render();} catch(e){console.error('Standings refresh failed',e);}
 },60000);
+
+let renderedRoundCount=visibleRoundCount();
+window.addEventListener('resize',()=>{
+  const nextCount=visibleRoundCount();
+  if(nextCount===renderedRoundCount)return;
+  renderedRoundCount=nextCount;
+  state.roundStart=Math.min(state.roundStart,lastRoundStart());
+  render();
+});
 
 bootstrap();
