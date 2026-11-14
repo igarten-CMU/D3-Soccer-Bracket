@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FIRST_ROUND, TEAM_LOGOS, ROUND_POINTS, LOCK_AT, gameKey, gameCount,
-  allGameKeys, matchup, chooseWinner, normalizePicks, scoreBracket, maxScore
+  FIRST_ROUND, TEAM_LOGOS, TEAM_NPI_RANKS, ROUND_POINTS, LOCK_AT, gameKey, gameCount,
+  allGameKeys, matchup, chooseWinner, normalizePicks, isTeamEliminated, scoreBracket, maxScore
 } from '../data.js';
 
 test('64 unique schools, 32 matches and 63 bracket decisions', () => {
@@ -29,6 +29,18 @@ test('every tournament team has an official NCAA logo', () => {
   }
 });
 
+test('every tournament team has its official NCAA selection NPI rank', () => {
+  const teams=FIRST_ROUND.flat();
+  assert.equal(Object.keys(TEAM_NPI_RANKS).length,64);
+  for (const team of teams) {
+    assert.equal(Number.isInteger(TEAM_NPI_RANKS[team]),true,`${team} is missing an NPI rank`);
+    assert.ok(TEAM_NPI_RANKS[team] > 0,`${team} has an invalid NPI rank`);
+  }
+  assert.equal(TEAM_NPI_RANKS.Williams,1);
+  assert.equal(TEAM_NPI_RANKS['Case Western Reserve'],9);
+  assert.equal(TEAM_NPI_RANKS['John Jay'],246);
+});
+
 test('advancing one winner determines next-round contenders', () => {
   let picks={};
   picks=chooseWinner(picks,0,0,'Williams');
@@ -50,6 +62,15 @@ test('changing an early pick invalidates dependent later-round predictions', () 
 
 test('normalization refuses impossible advancements', () => {
   assert.deepEqual(normalizePicks({r0m0:'Calvin',r1m0:'Williams',r0m2:'Southwestern (TX)'}),{r0m2:'Southwestern (TX)'});
+});
+
+test('a team eliminated by an earlier official result stays marked out downstream', () => {
+  const picks={r0m26:'Lynchburg',r0m27:'Kenyon',r1m13:'Kenyon',r2m6:'Kenyon'};
+  const results={r0m27:'Ohio Northern'};
+  assert.equal(isTeamEliminated('Kenyon',1,13,picks,results),true);
+  assert.equal(isTeamEliminated('Kenyon',2,6,picks,results),true);
+  assert.equal(isTeamEliminated('Lynchburg',1,13,picks,results),false);
+  assert.equal(isTeamEliminated('Kenyon',1,13,picks,{r0m27:'Kenyon'}),false);
 });
 
 test('all round scores use 10/20/40/80/160/320 and total 1920', () => {

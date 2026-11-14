@@ -39,6 +39,76 @@ export const FIRST_ROUND = [
   ['Scranton', 'Manhattanville'],
 ];
 
+// Final NCAA Division III men's soccer NPI rankings published for selections
+// on November 8, 2026. Keys use this app's display names rather than the
+// abbreviations in the NCAA table (for example, CWRU and Wash. & Lee).
+export const TEAM_NPI_RANKS = {
+  'Williams': 1,
+  'John Jay': 246,
+  'Johns Hopkins': 29,
+  'Roger Williams': 32,
+  'Southwestern (TX)': 18,
+  'Hardin-Simmons': 184,
+  'Trinity (TX)': 38,
+  'La Verne': 74,
+  'Amherst': 8,
+  'Stevens': 81,
+  'Messiah': 19,
+  'Vassar': 44,
+  'Case Western Reserve': 9,
+  'Penn St.-Behrend': 101,
+  'Hope': 46,
+  'Transylvania': 54,
+  'Tufts': 4,
+  'Penn St.-Abington': 121,
+  'Babson': 25,
+  'SUNY Oneonta': 33,
+  "Saint John's (MN)": 20,
+  'MSOE': 96,
+  'North Park': 27,
+  'Whitman': 66,
+  'St. Olaf': 7,
+  'Grinnell': 98,
+  'Wisconsin-Superior': 58,
+  'Loras': 75,
+  'UChicago': 15,
+  'Webster': 90,
+  'Calvin': 26,
+  'Wisconsin-Eau Claire': 61,
+  'Middlebury': 2,
+  "Saint Joseph's (ME)": 146,
+  'Hobart': 28,
+  'Wheaton (MA)': 31,
+  'Montclair State': 13,
+  'Southern Virginia': 193,
+  'Cortland': 17,
+  'Christopher Newport': 30,
+  'Hamilton': 6,
+  'Allegheny': 152,
+  'Denison': 23,
+  'Plattsburgh State': 51,
+  'Rowan': 10,
+  'Marymount (VA)': 177,
+  'Washington & Lee': 24,
+  'Colorado College': 47,
+  'Connecticut College': 3,
+  'UMass Boston': 102,
+  'Carnegie Mellon': 22,
+  'Salem State': 37,
+  'Lynchburg': 12,
+  'Covenant': 199,
+  'Kenyon': 21,
+  'Ohio Northern': 55,
+  'Bowdoin': 5,
+  'Thomas (ME)': 85,
+  'St. Lawrence': 16,
+  'Neumann': 39,
+  'Wesleyan (CT)': 11,
+  'SUNY Geneseo': 64,
+  'Scranton': 14,
+  'Manhattanville': 63,
+};
+
 // Official NCAA.com school marks for every team in the 2026 bracket.
 // The logo paths come from the same NCAA championship feed used for results.
 export const TEAM_LOGOS = {
@@ -151,6 +221,27 @@ export function chooseWinner(picks, round, game, team) {
   if (!options.includes(team)) return picks;
   const next = {...picks, [gameKey(round, game)]: team};
   return normalizePicks(next); // invalid downstream picks are discarded
+}
+
+export function isTeamEliminated(team, round, game, picks, results) {
+  if (!team || round <= 0) return false;
+  let sourceRound = round - 1;
+  let sourceGame = [game * 2, game * 2 + 1]
+    .find(candidate => picks[gameKey(sourceRound, candidate)] === team);
+  if (sourceGame === undefined) return false;
+
+  while (sourceRound >= 0) {
+    const officialWinner = results[gameKey(sourceRound, sourceGame)];
+    if (officialWinner && officialWinner !== team) return true;
+    if (sourceRound === 0) break;
+    const priorRound = sourceRound - 1;
+    const priorGame = [sourceGame * 2, sourceGame * 2 + 1]
+      .find(candidate => picks[gameKey(priorRound, candidate)] === team);
+    if (priorGame === undefined) break;
+    sourceRound = priorRound;
+    sourceGame = priorGame;
+  }
+  return false;
 }
 
 export function scoreBracket(picks, results) {

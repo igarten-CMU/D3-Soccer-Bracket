@@ -1,8 +1,8 @@
 import {
-  FIRST_ROUND, TEAM_LOGOS, ROUND_NAMES, ROUND_SHORT, ROUND_POINTS,
+  FIRST_ROUND, TEAM_LOGOS, TEAM_NPI_RANKS, ROUND_NAMES, ROUND_SHORT, ROUND_POINTS,
   LOCK_AT, NCAA_BRACKET_URL, gameKey, gameCount, allGameKeys,
-  matchup, normalizePicks, chooseWinner, scoreBracket, maxScore
-} from './data.js';
+  matchup, normalizePicks, chooseWinner, isTeamEliminated, scoreBracket, maxScore
+} from './data.js?v=20261113-npi-ranks';
 import {makeStore} from './store.js';
 
 const $app = document.getElementById('app');
@@ -279,9 +279,14 @@ function teamLogo(team, large=false) {
   return `<span class="team-logo ${large?'large':''}"><span class="team-logo-fallback">${h(teamInitials(team))}</span>${url?`<img src="${safeAttr(url)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}</span>`;
 }
 
+function teamNpiRank(team) {
+  const rank=TEAM_NPI_RANKS[team];
+  return rank ? `<sup class="npi-rank" title="NCAA NPI rank ${rank}">#${rank}</sup>` : '';
+}
+
 function renderGameCard(round,game,picks,canEdit) {
   const opts=matchup(round,game,picks),key=gameKey(round,game),picked=picks[key];
-  const result=publishedResults()[key];
+  const results=publishedResults(),result=results[key];
   const pickCorrect=!!result && picked===result;
   const pickWrong=!!result && !!picked && picked!==result;
   const resultLabel=pickCorrect?'CORRECT PICK':pickWrong?'INCORRECT PICK':result?'FINAL RESULT':'PICK WINNER';
@@ -293,10 +298,11 @@ function renderGameCard(round,game,picks,canEdit) {
       const selected=!!team && team===picked;
       const correct=!!result && result===team && !pickWrong;
       const wrong=!!result && selected && picked!==result;
-      const classes=['team-btn',selected?'selected':'',correct?'result-win':'',wrong?'wrong':'',!team?'empty':''].filter(Boolean).join(' ');
+      const eliminated=isTeamEliminated(team,round,game,picks,results);
+      const classes=['team-btn',selected?'selected':'',correct?'result-win':'',wrong?'wrong':'',eliminated?'eliminated':'',!team?'empty':''].filter(Boolean).join(' ');
       const disabled=!canEdit||!team;
       return `<button class="${classes}" data-action="pick" data-round="${round}" data-game="${game}" data-team="${safeAttr(team||'')}" ${disabled?'disabled':''} title="${team?`Advance ${safeAttr(team)}`:'Pick previous round first'}">
-          ${teamLogo(team)}<span class="team-name">${h(team || 'Winner from previous round')}</span><span class="selection-ring" aria-hidden="true">${selected?'<i></i>':''}</span>
+          ${teamLogo(team)}<span class="team-name">${teamNpiRank(team)}<span class="team-label">${h(team || 'Winner from previous round')}</span>${eliminated?'<small class="out-badge">OUT</small>':''}</span><span class="selection-ring" aria-hidden="true">${selected?'<i></i>':''}</span>
         </button>`;
       }).join('')}
       <div class="game-meta"><span>${result?'Official result':'Matchup'}</span><span>${result?'Final':`${ROUND_SHORT[round]} · Game ${game+1}`}</span></div>

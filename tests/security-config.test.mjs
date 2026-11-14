@@ -59,6 +59,11 @@ test('finalized picks clearly distinguish correct and incorrect selections', () 
   assert.match(app, /pickCorrect\?'CORRECT PICK':pickWrong\?'INCORRECT PICK'/);
   assert.match(app, /pickCorrect\?'pick-correct':pickWrong\?'pick-wrong'/);
   assert.match(app, /result===team && !pickWrong/);
+  assert.match(app, /isTeamEliminated\(team,round,game,picks,results\)/);
+  assert.match(app, /TEAM_NPI_RANKS\[team\]/);
+  assert.match(app, /class="npi-rank"/);
+  assert.doesNotMatch(app, /teamNpiRank\(picked\)/);
+  assert.match(app, /class="out-badge">OUT/);
 });
 
 test('league deletion is creator-only and uses a checked database RPC', () => {
