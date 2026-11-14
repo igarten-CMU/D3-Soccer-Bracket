@@ -39,4 +39,4 @@ button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:no
 @media(max-height:760px){.modal-overlay{align-items:flex-start;overflow-y:auto}.modal{margin:12px 0}}
 
 .team-name{display:flex;align-items:center;gap:4px;min-width:0;overflow:visible}.team-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.team-btn.eliminated .team-label{color:#d39a9d;text-decoration:line-through}.out-badge{flex:none;border:1px solid #a94d54;border-radius:3px;background:#4b2025;color:#ff858b;padding:1px 3px;font-size:7px;font-weight:800;line-height:1.15;text-decoration:none}
-.npi-rank{flex:none;align-self:flex-start;margin-top:1px;color:#74b9ff;font-size:7px;font-weight:800;line-height:1;text-decoration:none}
+.npi-rank{flex:none;align-self:flex-start;margin-top:1px;color:#fff;font-size:7px;font-weight:800;line-height:1;text-decoration:none}
